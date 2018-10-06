@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 
 	"github.com/gorilla/mux"
@@ -19,6 +21,8 @@ type serverConf struct {
 	name    string
 }
 
+var calledN uint64
+
 func main() {
 	log.Print("Starting service...")
 
@@ -33,6 +37,7 @@ func main() {
 
 	router := mux.NewRouter()
 	router.HandleFunc("/", hello)
+	router.HandleFunc("/count", metrics)
 
 	diagRouter := diagnostics.NewDiagnostics()
 
@@ -92,6 +97,12 @@ func main() {
 }
 
 func hello(w http.ResponseWriter, r *http.Request) {
+	atomic.AddUint64(&calledN, 1)
 	log.Println("Got hello request")
 	w.WriteHeader(200)
+}
+
+func metrics(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(fmt.Sprintf(`{"count": %d}`, calledN)))
 }
