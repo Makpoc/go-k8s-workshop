@@ -1,14 +1,23 @@
 package main
 
 import (
-	"log"
-	"net/http"
-	"os"
+	"context"
+	"os/signal"
+	"syscall"
 
 	"github.com/gorilla/mux"
 	"github.com/makpoc/go-k8s-workshop/internal/diagnostics"
+	"log"
+	"net/http"
+	"os"
+	"time"
 )
 
+type serverConf struct {
+	port string
+	handler http.Handler
+	name string
+}
 func main() {
 	log.Print("Starting service...")
 
@@ -24,19 +33,58 @@ func main() {
 	router := mux.NewRouter()
 	router.HandleFunc("/", hello)
 
-	go func() {
-		log.Print("Starting application server...")
-		err := http.ListenAndServe(":"+blPort, router)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}()
+	diagRouter := diagnostics.NewDiagnostics()
 
-	diagnostics := diagnostics.NewDiagnostics()
-	log.Print("Starting diagnostics server...")
-	err := http.ListenAndServe(":"+diagPort, diagnostics)
-	if err != nil {
-		log.Fatal(err)
+	errChan := make(chan error, 2)
+
+	serverConfs := []serverConf{
+		{
+			port : blPort,
+			handler: router,
+			name: "application",
+		},{
+			port : diagPort,
+			handler: diagRouter,
+			name: "diagnostics",
+		},
+	}
+
+	servers := make([]*http.Server, 2)
+
+	for i, sc := range serverConfs {
+		go func(conf serverConf, index int) {
+			log.Printf("Starting %s server...", conf.name)
+			srv := &http.Server {
+				Addr:    ":" + conf.port,
+				Handler: conf.handler,
+			}
+			servers[index] = srv
+			err := srv.ListenAndServe()
+			if err != nil {
+				errChan <- err
+			}
+		}(sc, i)
+	}
+
+	interruptChan := make(chan os.Signal, 1)
+	signal.Notify(interruptChan, os.Interrupt, syscall.SIGTERM)
+
+	select {
+	case err := <- errChan:
+		log.Printf("Got an error: %v", err)
+
+		case sig := <-interruptChan:
+			log.Printf("Received %v signal. Stopping...", sig)
+	}
+
+	for _, srv := range servers {
+		ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+		err := srv.Shutdown(ctx)
+		if err != nil {
+			log.Println(err)
+		}
+		cancel()
+		log.Print("Server stopped")
 	}
 }
 
