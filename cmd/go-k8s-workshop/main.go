@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/makpoc/go-k8s-workshop/internal/version"
 	"os/signal"
 	"sync/atomic"
 	"syscall"
@@ -24,7 +25,7 @@ type serverConf struct {
 var calledN uint64
 
 func main() {
-	log.Print("Starting service...")
+	log.Printf("Starting service v%s...", version.Version)
 
 	blPort := os.Getenv("PORT")
 	if blPort == "" {

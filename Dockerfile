@@ -1,6 +1,7 @@
 # Stage 1. Build the binary
 FROM golang:1.11 as builder
 
+ENV RELEASE "0.0.3"
 RUN adduser -u 10001 myuser
 
 ENV WORKSPACE /go/src/github.com/makpoc/go-k8s-workshop
@@ -12,6 +13,7 @@ WORKDIR $WORKSPACE
 
 RUN go get ./... && \
   CGO_ENABLED=0 go build \
+    -ldflags "-s -w -X github.com/makpoc/go-k8s-workshop/internal/version.Version=${RELEASE}" \
     -o bin/go-k8s-workshop github.com/makpoc/go-k8s-workshop/cmd/go-k8s-workshop
 
 # Stage 2. Run the binary
