@@ -14,10 +14,11 @@ import (
 )
 
 type serverConf struct {
-	port string
+	port    string
 	handler http.Handler
-	name string
+	name    string
 }
+
 func main() {
 	log.Print("Starting service...")
 
@@ -39,13 +40,13 @@ func main() {
 
 	serverConfs := []serverConf{
 		{
-			port : blPort,
+			port:    blPort,
 			handler: router,
-			name: "application",
-		},{
-			port : diagPort,
+			name:    "application",
+		}, {
+			port:    diagPort,
 			handler: diagRouter,
-			name: "diagnostics",
+			name:    "diagnostics",
 		},
 	}
 
@@ -54,7 +55,7 @@ func main() {
 	for i, sc := range serverConfs {
 		go func(conf serverConf, index int) {
 			log.Printf("Starting %s server...", conf.name)
-			srv := &http.Server {
+			srv := &http.Server{
 				Addr:    ":" + conf.port,
 				Handler: conf.handler,
 			}
@@ -70,20 +71,22 @@ func main() {
 	signal.Notify(interruptChan, os.Interrupt, syscall.SIGTERM)
 
 	select {
-	case err := <- errChan:
+	case err := <-errChan:
 		log.Printf("Got an error: %v", err)
 
-		case sig := <-interruptChan:
-			log.Printf("Received %v signal. Stopping...", sig)
+	case sig := <-interruptChan:
+		log.Printf("Received %v signal. Stopping...", sig)
 	}
 
 	for _, srv := range servers {
-		ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
-		err := srv.Shutdown(ctx)
-		if err != nil {
-			log.Println(err)
-		}
-		cancel()
+		func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			err := srv.Shutdown(ctx)
+			if err != nil {
+				log.Println(err)
+			}
+		}()
 		log.Print("Server stopped")
 	}
 }
